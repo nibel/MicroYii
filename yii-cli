@@ -1,0 +1,246 @@
+#!/usr/bin/env php
+<?php
+/**
+ * @Author: nibel
+ * @Date:   2020-06-30 16:42:27
+ * @Last Modified by:   nibel
+ * @Last Modified time: 2020-06-30 16:42:27
+ */
+Class YiiCli{ 
+    public $root;
+    public $templatePath;
+    public $params = [];
+
+    public function __construct(){
+        $this->root = str_replace('\\', '/', __DIR__);
+        $this->templatePath = $this->root."/src/template";
+        $this->params = $this->getParams();
+        $this->analyzeParams();
+    }
+
+    public function analyzeParams(){
+        if(isset($this->params[0])){
+            // var_dump($this->params);exit;
+            switch ($this->params[0]) {
+                case 'create-app':
+                    $this->createApp();
+                    break;
+                case 'help'://帮助命令
+                    
+                    break;
+                default:
+                    echo "\n输入yii-cli help查看使用命令\n\n";
+                    break;
+            }
+        }else{
+            echo "\n输入yii-cli help查看使用命令\n\n";
+        }
+        
+    }
+
+    /**
+     * 创建基础应用
+     * @return [type] [description]
+     */
+    public function createBase(){
+        $commonPath = $this->root."/common";
+        $commonConfigPath = $commonPath."/config";
+        @mkdir($commonPath, 0775, true);
+        @mkdir($commonConfigPath, 0775, true);
+
+        //复制公共配置文件 
+        $source = $this->templatePath."/common-config.php";
+        @copy($source,$commonConfigPath."/config.dev.php");
+        @copy($source,$commonConfigPath."/config.prod.php");
+        //设置应用别名alias
+        file_put_contents("./common/config/bootstrap.php","<?php\nYii::setAlias('@common', dirname(__DIR__));");
+
+    }
+
+    /**
+     * 创建应用
+     * @param  $[isConsole] [<是否为工作台应用>]
+     * @return [void] [无]
+     */
+    public function createApp($isConsole = false){
+        $appName = $this->params[1];
+        if(!file_exists($this->root."/common")){
+            $this->createBase();
+        }
+        $appPath = $this->root."/".$appName;
+        @mkdir($appPath, 0775, true);
+
+        //应用路径
+        $appPath = $this->root."/".$appName;
+        if(file_exists($appPath)){
+            exit("应用已创建\n\n");
+        }
+        @mkdir($appPath, 0775, true);
+        //创建APP配置文件
+        $writePath = $appPath."/config";
+        @mkdir($writePath, 0775, true);
+        $template = file_get_contents($this->templatePath."/app-config.php");
+        $writeData = str_replace("%APPNAME%", $appName, $template);
+        file_put_contents($writePath."/config.php", $writeData);
+        //设置命名空间
+        file_put_contents("./common/config/bootstrap.php","\nYii::setAlias('@{$appName}', dirname(dirname(__DIR__)) . '/{$appName}');",FILE_APPEND);
+
+        //设置controller
+        if(isset($this->params['console'])){
+            $writePath = $appPath."/controllers";
+            @mkdir($writePath, 0775, true);
+
+            $template = file_get_contents($this->templatePath."/console-controller.php");
+            $writeData = str_replace("%APPNAME%", $appName, $template);
+            file_put_contents($writePath."/SiteController.php", $writeData);
+        }else{
+            $writePath = $appPath."/controllers";
+            @mkdir($writePath, 0775, true);
+
+            $template = file_get_contents($this->templatePath."/web-controller.php");
+            $writeData = str_replace("%APPNAME%", $appName, $template);
+            file_put_contents($writePath."/SiteController.php", $writeData);
+        }
+
+        //设置入口文件
+        $writePath = $appPath."/web";
+        @mkdir($writePath, 0775, true);
+        $template = file_get_contents($this->templatePath."/index.php");
+        $writeData = $template;
+        file_put_contents($writePath."/index.php", $writeData);
+
+    }
+
+    private function getParams()
+    {
+        $rawParams = [];
+        if (isset($_SERVER['argv'])) {
+            $rawParams = $_SERVER['argv'];
+            array_shift($rawParams);
+        }
+
+        $params = [];
+        foreach ($rawParams as $param) {
+            if (preg_match('/^--(\w+)(=(.*))?$/', $param, $matches)) {
+                $name = $matches[1];
+                $params[$name] = isset($matches[3]) ? $matches[3] : true;
+            } else {
+                $params[] = $param;
+            }
+        }
+        return $params;
+    }
+}
+$cli = new YiiCli();
+exit;
+
+
+
+
+
+
+
+
+
+
+$root = str_replace('\\', '/', __DIR__);
+$templatePath = $root."/src/template";
+echo "MicroYii 应用创建脚手架\n\n";
+
+if(!file_exists($root."/common")){
+    echo "正在进行初始化设定...\n\n";
+    initApp($root,$templatePath);
+    echo "完成初始化设定...\n\n";
+    echo "要创建首个应用吗？\n【0】 否，之后创建\n【1】 是，现在创建\n";
+    $answer = trim(fgets(STDIN));
+    if($answer == 1){
+        generateApp($root,$templatePath);
+    }
+    echo "结束初始化..\n\n";
+    exit(0);
+}
+echo "开始创建新应用..\n";
+generateApp($root,$templatePath);
+echo "结束创建..\n\n";
+
+
+
+/**
+ * 初始化
+ * @return [type] [description]
+ */
+function initApp($root,$templatePath){
+    //创建公共目录
+    $commonPath = $root."/common";
+    $commonConfigPath = $commonPath."/config";
+    @mkdir($commonPath, 0775, true);
+    @mkdir($commonConfigPath, 0775, true);
+
+    //复制公共配置文件
+    $source = $templatePath."/common-config.php";
+    @copy($source,$commonConfigPath."/config.dev.php");
+    @copy($source,$commonConfigPath."/config.prod.php");
+
+    file_put_contents("./common/config/bootstrap.php","<?php\nYii::setAlias('@common', dirname(__DIR__));");
+}
+
+/**
+ * 创建应用
+ * @param  [type] $root         [description]
+ * @param  [type] $templatePath [description]
+ * @return [type]               [description]
+ */
+function generateApp($root,$templatePath){
+    $envParams = [];//创建应用所需的参数
+
+    //获取参数
+    echo "选择要创建的应用类型(默认为0):\n【0】 web应用\n【1】 console应用\n";
+    $type = trim(fgets(STDIN));
+    $envParams['type'] = $type;
+    echo $type == 1 ? "您选择的是console应用\n\n" : "您选择的是web应用\n\n";
+
+    echo "输入应用名称（英文）\n";
+    $name = trim(fgets(STDIN));
+    $envParams['name'] = strtolower(trim($name));
+    echo "【{$name}】将作为您的应用名称\n\n";
+
+    echo "开始执行创建程序....\n\n";
+    //app base path
+    $appPath = $root."/".$envParams['name'];
+    @mkdir($appPath, 0775, true);
+
+    //SET APP CONFIG
+    $writePath = $appPath."/config";
+    @mkdir($writePath, 0775, true);
+
+    $template = file_get_contents($templatePath."/app-config.php");
+    $writeData = str_replace("%APPNAME%", $envParams['name'], $template);
+    file_put_contents($writePath."/config.php", $writeData);
+
+    //SET NAMESPACE
+    file_put_contents("./common/config/bootstrap.php","Yii::setAlias('@{$envParams['name']}', dirname(dirname(__DIR__)) . '/{$envParams['name']}');",FILE_APPEND);
+
+    //SET DEFAULT CONTROLLER
+    if($envParams['type'] == 0){
+        $writePath = $appPath."/controllers";
+        @mkdir($writePath, 0775, true);
+
+        $template = file_get_contents($templatePath."/web-controller.php");
+        $writeData = str_replace("%APPNAME%", $envParams['name'], $template);
+        file_put_contents($writePath."/SiteController.php", $writeData);
+    }else{
+        $writePath = $appPath."/controllers";
+        @mkdir($writePath, 0775, true);
+
+        $template = file_get_contents($templatePath."/console-controller.php");
+        $writeData = str_replace("%APPNAME%", $envParams['name'], $template);
+        file_put_contents($writePath."/SiteController.php", $writeData);
+    }
+    
+    //SET GATE FILE
+    $writePath = $appPath."/web";
+    @mkdir($writePath, 0775, true);
+
+    $template = file_get_contents($templatePath."/index.php");
+    file_put_contents($writePath."/index.php", $writeData);
+}
